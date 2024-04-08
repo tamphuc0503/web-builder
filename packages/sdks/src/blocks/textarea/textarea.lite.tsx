@@ -1,3 +1,17 @@
+import { useMetadata, useTarget } from '@builder.io/mitosis';
+import { filterAttrs } from '../helpers.js';
+/**
+ * This import is used by the Svelte SDK. Do not remove.
+ */
+
+import { setAttrs } from '../helpers.js';
+
+useMetadata({
+  rsc: {
+    componentType: 'client',
+  },
+});
+
 export interface TextareaProps {
   attributes?: any;
   name?: string;
@@ -9,7 +23,16 @@ export interface TextareaProps {
 export default function Textarea(props: TextareaProps) {
   return (
     <textarea
-      {...props.attributes}
+      {...useTarget({
+        vue: filterAttrs(props.attributes, 'v-on:', false),
+        svelte: filterAttrs(props.attributes, 'on:', false),
+        default: {},
+      })}
+      {...useTarget({
+        vue: filterAttrs(props.attributes, 'v-on:', true),
+        svelte: filterAttrs(props.attributes, 'on:', true),
+        default: props.attributes,
+      })}
       placeholder={props.placeholder}
       name={props.name}
       value={props.value}

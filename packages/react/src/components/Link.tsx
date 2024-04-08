@@ -1,3 +1,4 @@
+'use client';
 import React from 'react';
 import { BuilderStoreContext } from '../store/builder-store';
 /**
@@ -7,7 +8,7 @@ import { BuilderStoreContext } from '../store/builder-store';
  * custom Link component (e.g Next, Gatsby, React Router)
  * <BuilderComponent renderLink=(props) => <myCustomLink {...props} /> />
  */
-export const Link: React.SFC<React.AnchorHTMLAttributes<HTMLAnchorElement>> = props => (
+export const Link = (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
   <BuilderStoreContext.Consumer>
     {context => {
       if (context.renderLink) {

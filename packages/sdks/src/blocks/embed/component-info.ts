@@ -1,10 +1,9 @@
-import type { ComponentInfo } from '../../types/components';
-import { serializeFn } from '../util.js';
+import type { ComponentInfo } from '../../types/components.js';
 
 export const componentInfo: ComponentInfo = {
   name: 'Embed',
   static: true,
-  builtIn: true,
+
   inputs: [
     {
       name: 'url',
@@ -12,7 +11,7 @@ export const componentInfo: ComponentInfo = {
       required: true,
       defaultValue: '',
       helperText: 'e.g. enter a youtube url, google map, etc',
-      onChange: serializeFn((options: Map<string, any>) => {
+      onChange: (options: Map<string, any>): void | Promise<void> => {
         const url = options.get('url');
         if (url) {
           options.set('content', 'Loading...');
@@ -40,7 +39,7 @@ export const componentInfo: ComponentInfo = {
         } else {
           options.delete('content');
         }
-      }),
+      },
     },
     {
       name: 'content',

@@ -1,4 +1,5 @@
-import React from 'react';
+'use client';
+import React, { PropsWithChildren } from 'react';
 import ReactDOM from 'react-dom';
 import { jsx, css } from '@emotion/core';
 import { BuilderContent, getContentWithInfo } from './builder-content.component';
@@ -11,6 +12,7 @@ import {
   BehaviorSubject,
   BuilderElement,
   BuilderContent as Content,
+  Component,
 } from '@builder.io/sdk';
 import { BuilderStoreContext } from '../store/builder-store';
 import hash from 'hash-sum';
@@ -18,7 +20,7 @@ import onChange from '../../lib/on-change';
 
 export { onChange };
 
-import { getSizesForBreakpoints, Sizes } from '../constants/device-sizes.constant';
+import { Breakpoints, getSizesForBreakpoints, Sizes } from '../constants/device-sizes.constant';
 import {
   BuilderAsyncRequestsContext,
   RequestOrPromise,
@@ -31,6 +33,12 @@ import { throttle } from '../functions/throttle';
 import { BuilderMetaContext } from '../store/builder-meta';
 import { tryEval } from '../functions/try-eval';
 import { toError } from '../to-error';
+import { getBuilderPixel } from '../functions/get-builder-pixel';
+import { isDebug } from '../functions/is-debug';
+
+export type RegisteredComponent = Component & {
+  component?: React.ComponentType<any>;
+};
 
 function pick<T, K extends keyof T>(obj: T, ...keys: K[]): Pick<T, K> {
   const ret: any = {};
@@ -46,6 +54,8 @@ function omit<T, K extends keyof T>(obj: T, ...keys: K[]): Omit<T, K> {
   });
   return ret;
 }
+
+const instancesMap = new Map<string, Builder>();
 
 const wrapComponent = (info: any) => {
   return (props: any) => {
@@ -88,7 +98,7 @@ function debounce(func: Function, wait: number, immediate = false) {
 
 const fontsLoaded = new Set();
 
-let fetch: typeof globalThis['fetch'];
+let fetch: (typeof globalThis)['fetch'];
 if (globalThis.fetch) fetch = globalThis.fetch;
 fetch ??= require('node-fetch');
 
@@ -282,6 +292,11 @@ export interface BuilderComponentProps {
    * Learn more about adding or removing locales [here](https://www.builder.io/c/docs/add-remove-locales)
    */
   locale?: string;
+
+  /**
+   * Pass a list of custom components to register with Builder.io.
+   */
+  customComponents?: Array<RegisteredComponent>;
 }
 
 export interface BuilderComponentState {
@@ -290,6 +305,7 @@ export interface BuilderComponentState {
   updates: number;
   context: any;
   key: number;
+  breakpoints?: Breakpoints;
 }
 
 function searchToObject(location: Location | Url) {
@@ -320,7 +336,7 @@ function searchToObject(location: Location | Url) {
  * `props.content`.
  */
 export class BuilderComponent extends React.Component<
-  BuilderComponentProps,
+  PropsWithChildren<BuilderComponentProps>,
   BuilderComponentState
 > {
   static defaults: Pick<BuilderComponentProps, 'codegen'> = {
@@ -386,12 +402,29 @@ export class BuilderComponent extends React.Component<
 
     // TODO: pass this all the way down - symbols, etc
     // this.asServer = Boolean(props.hydrate && Builder.isBrowser)
-
+    const contentData = this.inlinedContent?.data;
+    if (contentData && Array.isArray(contentData.inputs) && contentData.inputs.length > 0) {
+      if (!contentData.state) {
+        contentData.state = {};
+      }
+      // set default values of content inputs on state
+      contentData.inputs.forEach((input: any) => {
+        if (input) {
+          if (
+            input.name &&
+            input.defaultValue !== undefined &&
+            contentData.state![input.name] === undefined
+          ) {
+            contentData.state![input.name] = input.defaultValue;
+          }
+        }
+      });
+    }
     this.state = {
       // TODO: should change if this prop changes
       context: {
         ...props.context,
-        apiKey: builder.apiKey || this.props.apiKey,
+        apiKey: this.props.apiKey || builder.apiKey,
       },
       state: Object.assign(this.rootState, {
         ...(this.inlinedContent && this.inlinedContent.data && this.inlinedContent.data.state),
@@ -412,8 +445,10 @@ export class BuilderComponent extends React.Component<
 
     if (Builder.isBrowser) {
       const key = this.props.apiKey;
-      if (key && key !== this.builder.apiKey) {
-        this.builder.apiKey = key;
+      if (key && key !== this.builder.apiKey && !instancesMap.has(key)) {
+        // We create a builder instance for each api key to support loading of symbols from other spaces
+        const instance = new Builder(key, undefined, undefined, true);
+        instancesMap.set(key, instance);
       }
 
       if (this.inlinedContent) {
@@ -422,10 +457,13 @@ export class BuilderComponent extends React.Component<
         this.onContentLoaded(content?.data, getContentWithInfo(content)!);
       }
     }
+
+    this.registerCustomComponents();
   }
 
   get builder() {
-    return this.props.builder || builder;
+    const instance = this.props.apiKey && instancesMap.get(this.props.apiKey);
+    return instance || this.props.builder || builder;
   }
 
   getHtmlData() {
@@ -476,6 +514,28 @@ export class BuilderComponent extends React.Component<
   messageListener = (event: MessageEvent) => {
     const info = event.data;
     switch (info.type) {
+      case 'builder.configureSdk': {
+        const data = info.data;
+
+        if (!data.contentId || data.contentId !== this.useContent?.id) {
+          return;
+        }
+
+        this.sizes = getSizesForBreakpoints(data.breakpoints || {});
+
+        this.setState({
+          state: Object.assign(this.rootState, {
+            deviceSize: this.deviceSizeState,
+            // TODO: will user attributes be ready here?
+            device: this.device,
+          }),
+          updates: ((this.state && this.state.updates) || 0) + 1,
+          breakpoints: data.breakpoints,
+        });
+
+        break;
+      }
+
       case 'builder.updateSpacer': {
         const data = info.data;
         const currentSpacer = this.rootState._spacer;
@@ -648,6 +708,17 @@ export class BuilderComponent extends React.Component<
   }
 
   mounted = false;
+
+  registerCustomComponents() {
+    if (this.props.customComponents) {
+      for (const customComponent of this.props.customComponents) {
+        if (customComponent) {
+          const { component, ...registration } = customComponent;
+          Builder.registerComponent(component, registration);
+        }
+      }
+    }
+  }
 
   componentDidMount() {
     this.mounted = true;
@@ -869,6 +940,10 @@ export class BuilderComponent extends React.Component<
       });
     }
 
+    if (this.props.customComponents && this.props.customComponents !== prevProps.customComponents) {
+      this.registerCustomComponents();
+    }
+
     if (Builder.isEditing) {
       if (this.inlinedContent && prevProps.content !== this.inlinedContent) {
         this.onContentLoaded(this.inlinedContent.data, this.inlinedContent);
@@ -1009,8 +1084,11 @@ export class BuilderComponent extends React.Component<
                         if (this.props.dataOnly) {
                           return null;
                         }
-
                         if (fullData && fullData.id) {
+                          if (this.state.breakpoints) {
+                            fullData.meta = fullData.meta || {};
+                            fullData.meta.breakpoints = this.state.breakpoints;
+                          }
                           this.state.context.builderContent = fullData;
                         }
                         if (Builder.isBrowser) {
@@ -1070,15 +1148,28 @@ export class BuilderComponent extends React.Component<
                           );
                         }
 
+                        const blocks = data?.blocks || [];
+
+                        const hasPixel = blocks.find((block: BuilderElement) =>
+                          block.id?.startsWith('builder-pixel')
+                        );
+
+                        if (data && !hasPixel && blocks.length > 0) {
+                          blocks.push(getBuilderPixel(builder.apiKey!));
+                        }
+
                         // TODO: loading option - maybe that is what the children is or component prop
                         // TODO: get rid of all these wrapper divs
                         return data ? (
                           <div
                             data-builder-component={this.name}
                             data-builder-content-id={fullData.id}
-                            data-builder-variation-id={
-                              fullData.testVariationId || fullData.variationId || fullData.id
-                            }
+                            {...(this.isPreviewing
+                              ? {
+                                  'data-builder-variation-id':
+                                    fullData.testVariationId || fullData.variationId || fullData.id,
+                                }
+                              : {})}
                           >
                             {!codegen && this.getCss(data) && (
                               <style
@@ -1105,7 +1196,7 @@ export class BuilderComponent extends React.Component<
                                   key={String(!!data?.blocks?.length)}
                                   emailMode={this.props.emailMode}
                                   fieldName="blocks"
-                                  blocks={data.blocks}
+                                  blocks={blocks}
                                 />
                               )}
                             </BuilderStoreContext.Provider>
@@ -1293,10 +1384,10 @@ export class BuilderComponent extends React.Component<
         state: Object.assign(this.rootState, {
           ...this.state.state,
           location: this.locationState,
-          deviceSize: this.deviceSizeState,
           device: this.device,
           ...data.state,
           ...this.externalState,
+          deviceSize: this.deviceSizeState,
         }),
       };
       if (this.mounted) {
@@ -1348,7 +1439,7 @@ export class BuilderComponent extends React.Component<
               error.stack
             );
           } else {
-            if (process.env.DEBUG) {
+            if (isDebug()) {
               console.debug(
                 'Builder custom code error:',
                 error.message,

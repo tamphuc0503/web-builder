@@ -1,11 +1,13 @@
-<script>
-  import { RenderContent } from '@builder.io/sdk-svelte';
-  import { getContentForPathname } from '@builder.io/sdks-e2e-tests';
+<script lang="ts">
+  import { Content, _processContentResult } from '@builder.io/sdk-svelte';
+  import { getProps } from '@e2e/tests';
 
-  // TODO: enter your public API key
-  const BUILDER_PUBLIC_API_KEY = 'f1a790f8c3204b3b8c5c1795aeac4660'; // ggignore
+  let props = undefined;
+  const fetch = async () => {
+    props = await getProps({ _processContentResult });
+  };
 
-  $: content = getContentForPathname();
+  fetch();
 </script>
 
 <svelte:head>
@@ -13,8 +15,8 @@
 </svelte:head>
 
 <main>
-  {#if content}
-    <RenderContent model="page" {content} apiKey={BUILDER_PUBLIC_API_KEY} />
+  {#if props}
+    <Content {...props} />
   {:else}
     Content Not Found
   {/if}

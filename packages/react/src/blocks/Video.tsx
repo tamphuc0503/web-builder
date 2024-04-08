@@ -1,6 +1,6 @@
 /** @jsx jsx */
 import { jsx } from '@emotion/core';
-import React from 'react';
+import React, { PropsWithChildren } from 'react';
 
 import { throttle } from '../functions/throttle';
 import { withChildren } from '../functions/with-children';
@@ -8,22 +8,25 @@ import { Builder } from '@builder.io/sdk';
 
 const DEFAULT_ASPECT_RATIO = 0.7004048582995948;
 
-class VideoComponent extends React.Component<{
-  video: string;
-  autoPlay?: boolean;
-  controls?: boolean;
-  muted?: boolean;
-  loop?: boolean;
-  playsInline?: boolean;
-  aspectRatio?: number;
-  width?: number;
-  height?: number;
-  fit?: 'contain' | 'cover' | 'fill';
-  position?: string;
-  posterImage?: string;
-  lazyLoad?: boolean;
-  fitContent?: boolean;
-}> {
+class VideoComponent extends React.Component<
+  PropsWithChildren<{
+    video: string;
+    autoPlay?: boolean;
+    controls?: boolean;
+    muted?: boolean;
+    loop?: boolean;
+    playsInline?: boolean;
+    aspectRatio?: number;
+    width?: number;
+    height?: number;
+    fit?: 'contain' | 'cover' | 'fill';
+    preload?: 'auto' | 'metadata' | 'none';
+    position?: string;
+    posterImage?: string;
+    lazyLoad?: boolean;
+    fitContent?: boolean;
+  }>
+> {
   video: HTMLVideoElement | null = null;
   containerRef: HTMLElement | null = null;
 
@@ -121,6 +124,7 @@ class VideoComponent extends React.Component<{
           muted={this.props.muted}
           controls={this.props.controls}
           loop={this.props.loop}
+          preload={this.props.preload || 'metadata'}
           className="builder-video"
           css={{
             width: '100%',
@@ -194,7 +198,7 @@ export const Video = Builder.registerComponent(withChildren(VideoComponent), {
       allowedFileTypes: ['mp4'],
       bubble: true,
       defaultValue:
-        'https://firebasestorage.googleapis.com/v0/b/builder-3b0a2.appspot.com/o/assets%2FKQlEmWDxA0coC3PK6UvkrjwkIGI2%2F28cb070609f546cdbe5efa20e931aa4b?alt=media&token=912e9551-7a7c-4dfb-86b6-3da1537d1a7f',
+        'https://cdn.builder.io/o/assets%2FYJIGb4i01jvw0SRdL5Bt%2Fd27731a526464deba0016216f5f9e570%2Fcompressed?apiKey=YJIGb4i01jvw0SRdL5Bt&token=d27731a526464deba0016216f5f9e570&alt=media&optimized=true',
       required: true,
     },
     {
@@ -233,6 +237,12 @@ export const Video = Builder.registerComponent(withChildren(VideoComponent), {
       type: 'text',
       defaultValue: 'cover',
       enum: ['contain', 'cover', 'fill', 'auto'],
+    },
+    {
+      name: 'preload',
+      type: 'text',
+      defaultValue: 'metadata',
+      enum: ['auto', 'metadata', 'none'],
     },
     {
       name: 'fitContent',

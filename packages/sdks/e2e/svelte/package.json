@@ -1,27 +1,26 @@
 {
-  "name": "@builder.io/e2e-svelte",
+  "name": "@e2e/svelte",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "yarn run check && vite build",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
     "dev": "vite",
-    "e2e": "../../node_modules/.bin/playwright test",
-    "serve": "vite preview"
+    "build": "vite build",
+    "serve": "vite preview",
+    "check": "SDK_ENV=browser svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
     "@builder.io/sdk-svelte": "workspace:*",
-    "@builder.io/sdks-e2e-tests": "workspace:*"
+    "@e2e/tests": "workspace:*"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^1.0.5",
-    "@tsconfig/svelte": "^3.0.0",
-    "svelte": "^3.48.0",
-    "svelte-check": "^2.8.0",
-    "svelte-preprocess": "^4.10.7",
-    "tslib": "^2.4.0",
-    "typescript": "^4",
-    "vite": "^3.0.4"
+    "@sveltejs/vite-plugin-svelte": "^2.0.3",
+    "@tsconfig/svelte": "^4.0.1",
+    "nx": "^16.6.0",
+    "nx-cloud": "^16.2.0",
+    "svelte": "^3.57.0",
+    "svelte-check": "^3.4.6",
+    "tslib": "^2.5.0",
+    "typescript": "^5.1.6",
+    "vite": "^4.3.2"
   }
 }

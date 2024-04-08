@@ -1,82 +1,112 @@
-import { flatten } from '../../helpers/flatten.js';
+import { TARGET } from '../../constants/target.js';
+import { handleABTesting } from '../../helpers/ab-tests.js';
+import { getDefaultCanTrack } from '../../helpers/canTrack.js';
+import { logger } from '../../helpers/logger.js';
+import { getPreviewContent } from '../../helpers/preview-lru-cache/get.js';
 import type { BuilderContent } from '../../types/builder-content.js';
-import {
-  getBuilderSearchParamsFromWindow,
-  normalizeSearchParams,
-} from '../get-builder-search-params/index.js';
-import { getFetch } from '../get-fetch.js';
-import { handleABTesting } from './ab-testing.js';
+import { fetch } from '../get-fetch.js';
+import { isBrowser } from '../is-browser.js';
+import { generateContentUrl } from './generate-content-url.js';
+import type { GetContentOptions } from './types.js';
 
-export type GetContentOptions = import('./types.js').GetContentOptions;
+const checkContentHasResults = (
+  content: ContentResponse
+): content is ContentResults => 'results' in content;
 
-export async function getContent(
+/**
+ * Returns the first content entry that matches the given options.
+ */
+export async function fetchOneEntry(
   options: GetContentOptions
 ): Promise<BuilderContent | null> {
-  return (await getAllContent({ ...options, limit: 1 })).results[0] || null;
+  const allContent = await fetchEntries({ ...options, limit: 1 });
+
+  if (allContent) {
+    return allContent[0] || null;
+  }
+
+  return null;
 }
 
-export const generateContentUrl = (options: GetContentOptions): URL => {
-  const {
-    limit = 30,
-    userAttributes,
-    query,
-    noTraverse = false,
-    model,
-    apiKey,
-    includeRefs = true,
-  } = options;
-
-  if (!apiKey) {
-    throw new Error('Missing API key');
-  }
-
-  const url = new URL(
-    `https://cdn.builder.io/api/v2/content/${model}?apiKey=${apiKey}&limit=${limit}&noTraverse=${noTraverse}&includeRefs=${includeRefs}`
-  );
-
-  const queryOptions = {
-    ...getBuilderSearchParamsFromWindow(),
-    ...normalizeSearchParams(options.options || {}),
-  };
-
-  const flattened = flatten(queryOptions);
-  for (const key in flattened) {
-    url.searchParams.set(key, String(flattened[key]));
-  }
-
-  if (userAttributes) {
-    url.searchParams.set('userAttributes', JSON.stringify(userAttributes));
-  }
-  if (query) {
-    const flattened = flatten({ query });
-    for (const key in flattened) {
-      url.searchParams.set(key, JSON.stringify((flattened as any)[key]));
-    }
-  }
-
-  return url;
+type ContentResults = {
+  results: BuilderContent[];
 };
 
-interface ContentResponse {
-  results: BuilderContent[];
-}
+type ContentResponse =
+  | ContentResults
+  | {
+      status: number;
+      message: string;
+    };
 
-export async function getAllContent(
-  options: GetContentOptions
-): Promise<ContentResponse> {
+const _fetchContent = async (options: GetContentOptions) => {
   const url = generateContentUrl(options);
+  const _fetch = options.fetch ?? fetch;
+  const res = await _fetch(url.href, options.fetchOptions);
 
-  const fetch = await getFetch();
-  const content: ContentResponse = await fetch(url.href).then((res) =>
-    res.json()
-  );
+  const content = await (res.json() as Promise<ContentResponse>);
+  return content;
+};
 
-  const canTrack = options.canTrack !== false;
-  if (canTrack) {
+/**
+ * @internal Exported only for testing purposes. Do not use.
+ */
+export const _processContentResult = async (
+  options: GetContentOptions,
+  content: ContentResults,
+  url: URL = generateContentUrl(options)
+): Promise<BuilderContent[]> => {
+  const canTrack = getDefaultCanTrack(options.canTrack);
+
+  const isPreviewing = url.search.includes(`preview=`);
+
+  if (TARGET === 'rsc' && isPreviewing) {
+    const newResults: BuilderContent[] = [];
     for (const item of content.results) {
-      await handleABTesting({ item, canTrack });
+      const previewContent = getPreviewContent(url.searchParams);
+      newResults.push(previewContent || item);
     }
+    content.results = newResults;
   }
 
-  return content;
+  if (!canTrack) return content.results;
+  if (!(isBrowser() || TARGET === 'reactNative')) return content.results;
+
+  /**
+   * For client-side navigations, it is ideal to handle AB testing at this point instead of using our
+   * complex multi-rendering variants approach, which is only needed for SSR'd content.
+   *
+   * This is also where react-native would handle AB testing.
+   */
+  try {
+    const newResults: BuilderContent[] = [];
+    for (const item of content.results) {
+      newResults.push(await handleABTesting({ item, canTrack }));
+    }
+    content.results = newResults;
+  } catch (e) {
+    logger.error('Could not process A/B tests. ', e);
+  }
+
+  return content.results;
+};
+
+/**
+ * Returns a paginated array of entries that match the given options.
+ */
+export async function fetchEntries(options: GetContentOptions) {
+  try {
+    const url = generateContentUrl(options);
+    const content = await _fetchContent(options);
+
+    if (!checkContentHasResults(content)) {
+      logger.error('Error fetching data. ', { url, content, options });
+      return null;
+    }
+
+    return _processContentResult(options, content);
+  } catch (error) {
+    logger.error('Error fetching data. ', error);
+    return null;
+  }
 }

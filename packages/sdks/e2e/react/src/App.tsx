@@ -1,19 +1,79 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import { RenderContent } from '@builder.io/sdk-react';
-import { getContentForPathname } from '@builder.io/sdks-e2e-tests';
+import {
+  Content,
+  _processContentResult,
+  fetchOneEntry,
+  subscribeToEditor,
+} from '@builder.io/sdk-react';
+import { getProps } from '@e2e/tests';
+import { useEffect, useState } from 'react';
 
-// TODO: enter your public API key
-const BUILDER_PUBLIC_API_KEY = 'f1a790f8c3204b3b8c5c1795aeac4660'; // ggignore
+const DataComp = (props: {
+  pathname: string;
+  children: (args: { data?: { x?: string } }) => React.ReactNode;
+}) => {
+  const [data, setData] = useState('foo');
+  if (props.pathname === '/external-data') {
+    return (
+      <div>
+        <div>External data: {data}</div>
+        <button onClick={() => setData(data === 'foo' ? 'bar' : 'foo')}>
+          Change value
+        </button>
+        {props.children({ data: { x: data } })}
+      </div>
+    );
+  } else {
+    return props.children({});
+  }
+};
+
+const CustomLinkComp = (props: any) => {
+  return <a {...props}>Custom Link: {props.children}</a>;
+};
 
 function App() {
-  const content = getContentForPathname();
-  return content ? (
-    <RenderContent
-      content={content}
-      model="page"
-      apiKey={BUILDER_PUBLIC_API_KEY}
-    />
+  const [props, setProps] = useState<any>(undefined);
+
+  useEffect(() => {
+    getProps({ _processContentResult, fetchOneEntry }).then(setProps);
+
+    if (window.location.pathname === '/data-preview') {
+      const unsubscribe = subscribeToEditor('coffee', (content) =>
+        setProps({ content })
+      );
+
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, []);
+
+  if (window.location.pathname === '/data-preview') {
+    if (!props?.content) {
+      return <div>Loading...</div>;
+    }
+    return (
+      <>
+        <div>coffee name: {props.content.data?.name}</div>
+        <div>coffee info: {props.content.data?.info}</div>
+      </>
+    );
+  }
+
+  return props ? (
+    <DataComp pathname={window.location.pathname}>
+      {({ data }) => (
+        <Content
+          {...props}
+          data={data}
+          linkComponent={
+            window.location.search.includes('link-component')
+              ? CustomLinkComp
+              : undefined
+          }
+        />
+      )}
+    </DataComp>
   ) : (
     <div>Content Not Found</div>
   );

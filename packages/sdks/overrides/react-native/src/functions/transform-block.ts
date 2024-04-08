@@ -9,6 +9,8 @@ export function transformBlock(block: BuilderBlock): BuilderBlock {
   if (block.id.startsWith('builder-pixel-') && !block.component) {
     return {
       ...block,
+      // drop the `tagName` field so it never ends up rendered.
+      tagName: undefined,
       component: {
         name: 'Image',
         options: {
@@ -16,6 +18,11 @@ export function transformBlock(block: BuilderBlock): BuilderBlock {
           width: 1,
           height: 1,
         },
+      },
+      properties: {
+        ...block.properties,
+        width: 1 as any,
+        height: 1 as any,
       },
     };
   }

@@ -1,10 +1,9 @@
-import type { ComponentInfo } from '../../types/components';
-import { serializeFn } from '../util.js';
+import type { ComponentInfo } from '../../types/components.js';
 
 export const componentInfo: ComponentInfo = {
   name: 'Image',
   static: true,
-  builtIn: true,
+
   image:
     'https://firebasestorage.googleapis.com/v0/b/builder-3b0a2.appspot.com/o/images%2Fbaseline-insert_photo-24px.svg?alt=media&token=4e5d0ef4-f5e8-4e57-b3a9-38d63a9b9dc4',
   defaultStyles: {
@@ -22,8 +21,8 @@ export const componentInfo: ComponentInfo = {
       allowedFileTypes: ['jpeg', 'jpg', 'png', 'svg'],
       required: true,
       defaultValue:
-        'https://cdn.builder.io/api/v1/image/assets%2Fpwgjf0RoYWbdnJSbpBAjXNRMe9F2%2Ffb27a7c790324294af8be1c35fe30f4d',
-      onChange: serializeFn((options: Map<string, any>) => {
+        'https://cdn.builder.io/api/v1/image/assets%2FYJIGb4i01jvw0SRdL5Bt%2F72c80f114dc149019051b6852a9e3b7a',
+      onChange: (options: Map<string, any>): void | Promise<void> => {
         const DEFAULT_ASPECT_RATIO = 0.7041;
         options.delete('srcset');
         options.delete('noWebp');
@@ -85,7 +84,7 @@ export const componentInfo: ComponentInfo = {
             }
           });
         }
-      }),
+      },
     },
     {
       name: 'backgroundSize',

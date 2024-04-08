@@ -1,23 +1,20 @@
 import type { Component } from 'solid-js';
+import { createResource, Show } from 'solid-js';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import { RenderContent } from '@builder.io/sdk-solid';
-import { getContentForPathname } from '@builder.io/sdks-e2e-tests';
-
-// TODO: enter your public API key
-const BUILDER_PUBLIC_API_KEY = 'f1a790f8c3204b3b8c5c1795aeac4660'; // ggignore
+import { _processContentResult, Content } from '@builder.io/sdk-solid';
+import { getProps } from '@e2e/tests';
 
 const App: Component = () => {
-  const content = getContentForPathname();
+  const [props] = createResource(() => getProps({ _processContentResult }));
 
-  return content ? (
-    <RenderContent
-      content={content}
-      model="page"
-      apiKey={BUILDER_PUBLIC_API_KEY}
-    />
-  ) : (
-    <div>Content Not Found</div>
+  return (
+    <Show
+      when={!props.loading && !props.error}
+      fallback={<div>Content Not Found</div>}
+    >
+      {() => <Content {...props()} />}
+    </Show>
   );
 };
 

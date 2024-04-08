@@ -1,12 +1,13 @@
 /** @jsx jsx */
 import { jsx } from '@emotion/core';
-import React from 'react';
+import React, { PropsWithChildren } from 'react';
 import { BuilderComponent } from '../components/builder-component.component';
 import { Builder, BuilderElement } from '@builder.io/sdk';
 import hash from 'hash-sum';
 import { NoWrap } from '../components/no-wrap';
 import { BuilderStoreContext } from '../store/builder-store';
 import { withBuilder } from '../functions/with-builder';
+import { omit } from '../functions/utils';
 
 const size = (thing: object) => Object.keys(thing).length;
 
@@ -34,6 +35,7 @@ export interface SymbolInfo {
   content?: any;
   inline?: boolean;
   dynamic?: boolean;
+  ownerId?: string;
 }
 
 export interface SymbolProps {
@@ -45,7 +47,7 @@ export interface SymbolProps {
   inheritState?: boolean;
 }
 
-class SymbolComponent extends React.Component<SymbolProps> {
+class SymbolComponent extends React.Component<PropsWithChildren<SymbolProps>> {
   ref: BuilderComponent | null = null;
   staticRef: HTMLDivElement | null = null;
 
@@ -89,7 +91,7 @@ class SymbolComponent extends React.Component<SymbolProps> {
       ? NoWrap
       : (this.props.builderBlock && this.props.builderBlock.tagName) || 'div';
 
-    const { model, entry, data, content, inline } = symbol || {};
+    const { model, entry, data, content, inline, ownerId } = symbol || {};
     const dynamic = symbol?.dynamic || this.props.dynamic;
     if (!(model && (entry || dynamic)) && !content?.data?.blocksJs && !inline) {
       showPlaceholder = true;
@@ -101,11 +103,11 @@ class SymbolComponent extends React.Component<SymbolProps> {
     if (key && dataString && dataString.length < 300) {
       key += ':' + dataString;
     }
-
     const attributes = this.props.attributes || {};
     return (
       <BuilderStoreContext.Consumer key={(model || 'no model') + ':' + (entry || 'no entry')}>
         {state => {
+          const builderComponentKey = `${key}_${state?.state?.locale || 'Default'}`;
           return (
             <TagName
               data-model={model}
@@ -121,21 +123,23 @@ class SymbolComponent extends React.Component<SymbolProps> {
                 this.placeholder
               ) : (
                 <BuilderComponent
+                  {...(ownerId && { apiKey: ownerId })}
                   {...(state.state?.locale && { locale: state.state.locale })}
                   isChild
                   ref={(ref: any) => (this.ref = ref)}
                   context={{ ...state.context, symbolId: this.props.builderBlock?.id }}
-                  modelName={model}
+                  model={model}
                   entry={entry}
                   data={{
                     ...data,
-                    ...(!!this.props.inheritState && state.state),
+                    ...(!!this.props.inheritState && omit(state.state, 'children')),
                     ...this.props.builderBlock?.component?.options?.symbol?.content?.data?.state,
                   }}
                   renderLink={state.renderLink}
                   inlineContent={symbol?.inline}
                   {...(content && { content })}
-                  options={{ key, noEditorUpdates: true }}
+                  key={builderComponentKey}
+                  options={{ key: builderComponentKey, noEditorUpdates: true }}
                   codegen={!!content?.data?.blocksJs}
                   hydrate={state.state?._hydrate}
                   builderBlock={this.props.builderBlock}

@@ -4,14 +4,13 @@ import { nextTick } from './functions/next-tick.function';
 import { QueryString } from './classes/query-string.class';
 import { version } from '../package.json';
 import { BehaviorSubject } from './classes/observable.class';
-import { fetch, SimplifiedFetchOptions } from './functions/fetch.function';
+import { getFetch, SimplifiedFetchOptions } from './functions/fetch.function';
 import { assign } from './functions/assign.function';
 import { throttle } from './functions/throttle.function';
 import { Animator } from './classes/animator.class';
 import { BuilderElement } from './types/element';
 import Cookies from './classes/cookies.class';
 import { omit } from './functions/omit.function';
-import serverOnlyRequire from './functions/server-only-require.function';
 import { getTopLevelDomain } from './functions/get-top-level-domain';
 import { BuilderContent } from './types/content';
 import { uuid } from './functions/uuid';
@@ -22,6 +21,7 @@ import { parse as urlParse } from './url';
 import hash from 'hash-sum';
 import { toError } from './functions/to-error';
 import { emptyUrl, UrlLike } from './url';
+import { DEFAULT_API_VERSION, ApiVersion } from './types/api-version';
 
 export type Url = any;
 
@@ -119,7 +119,7 @@ function setCookie(name: string, value: string, expires?: Date) {
       expiresString +
       '; path=/' +
       `; domain=${getTopLevelDomain(location.hostname)}` +
-      (secure ? ';secure ; SameSite=None' : '');
+      (secure ? '; secure; SameSite=None' : '');
   } catch (err) {
     console.warn('Could not set cookie', err);
   }
@@ -271,7 +271,12 @@ export interface UserAttributes {
   operatingSystem?: string;
 }
 
-export interface GetContentOptions {
+type AllowEnrich =
+  | { apiVersion?: Extract<ApiVersion, 'v1'> }
+  | { apiVersion?: Extract<ApiVersion, 'v3'>; enrich?: boolean }
+  | { apiVersion?: never; enrich?: boolean };
+
+export type GetContentOptions = AllowEnrich & {
   /**
    * User attribute key value pairs to be used for targeting
    * https://www.builder.io/c/docs/custom-targeting-attributes
@@ -295,12 +300,14 @@ export interface GetContentOptions {
    */
   includeUrl?: boolean;
   /**
-   * Follow references. If you use the `reference` field to pull in other content without this
+   * Include content of references in the response.
+   * If you use the `reference` field to pull in other content without this
    * enabled we will not fetch that content for the final response.
+   * @deprecated use `enrich` instead
    */
   includeRefs?: boolean;
   /**
-   * How long in seconds content should be cached for. Sets the max-age of the cache-control header
+   * Seconds to cache content. Sets the max-age of the cache-control header
    * response header.
    *
    * Use a higher value for better performance, lower for content that will change more frequently
@@ -323,6 +330,10 @@ export interface GetContentOptions {
    * Maximum number of results to return. Defaults to `1`.
    */
   limit?: number;
+  /**
+   * Use to specify an offset for pagination of results. The default is 0.
+   */
+  offset?: number;
   /**
    * Mongodb style query of your data. E.g.:
    *
@@ -356,10 +367,6 @@ export interface GetContentOptions {
    * Extract any styles to a separate css property when generating HTML.
    */
   extractCss?: boolean;
-  /**
-   * Pagination results offset. Defaults to zero.
-   */
-  offset?: number;
   /**
    * @package
    *
@@ -395,13 +402,23 @@ export interface GetContentOptions {
    * @hidden
    */
   alias?: string;
-  fields?: string;
   /**
-   * Omit only these fields.
+   * Only include these fields.
+   * Note: 'omit' takes precedence over 'fields'
    *
    * @example
    * ```
-   * &omit=data.bigField,data.blocks
+   * fields: 'id, name, data.customField'
+   * ```
+   */
+  fields?: string;
+  /**
+   * Omit only these fields.
+   * Note: 'omit' takes precedence over 'fields'
+   *
+   * @example
+   * ```
+   * omit: 'data.bigField,data.blocks'
    * ```
    */
   omit?: string;
@@ -447,7 +464,34 @@ export interface GetContentOptions {
    * content thinking they should updates when they actually shouldn't.
    */
   noEditorUpdates?: boolean;
-}
+
+  /**
+   * If set to `true`, it will lazy load symbols/references.
+   * If set to `false`, it will render the entire content tree eagerly.
+   * @deprecated use `enrich` instead
+   */
+  noTraverse?: boolean;
+
+  /**
+   * Property to order results by.
+   * Use 1 for ascending and -1 for descending.
+   *
+   * The key is what you're sorting on, so the following example sorts by createdDate
+   * and because the value is 1, the sort is ascending.
+   *
+   * @example
+   * ```
+   * createdDate: 1
+   * ```
+   */
+  sort?: { [key: string]: 1 | -1 };
+
+  /**
+   * Include content entries in a response that are still in
+   * draft mode and un-archived. Default is false.
+   */
+  includeUnpublished?: boolean;
+};
 
 export type Class = {
   name?: string;
@@ -491,7 +535,7 @@ export interface Input {
   /**
    * The type of input to use, such as 'text'
    *
-   * See all available inputs [here](https://www.builder.io/c/docs/custom-react-components#input-types)
+   * See all available inputs [here](https://www.builder.io/c/docs/custom-components-input-types)
    * and you can create your own custom input types and associated editor UIs with [plugins](https://www.builder.io/c/docs/extending/plugins)
    */
   type: string;
@@ -558,7 +602,7 @@ export interface Input {
   /**
    * For "text" input type, specifying an enum will show a dropdown of options instead
    */
-  enum?: string[] | { label: string; value: any; helperText?: string }[];
+  enum?: string[] | { label: string; value: string | number | boolean; helperText?: string }[];
   /** Regex field validation for all string types (text, longText, html, url, etc) */
   regex?: {
     /** pattern to test, like "^\/[a-z]$" */
@@ -591,6 +635,8 @@ export interface Input {
    * Use optionally with inputs of type `reference`. Restricts the content entry picker to a specific model by name.
    */
   model?: string;
+
+  meta?: Record<string, any>;
 }
 
 /**
@@ -744,7 +790,6 @@ export interface Component {
     query?: any;
   };
 
-  /** @hidden @deprecated */
   friendlyName?: string;
 
   /**
@@ -839,7 +884,14 @@ export class Builder {
   static throttle = throttle;
 
   static editors: any[] = [];
-  static trustedHosts: string[] = ['builder.io', 'localhost'];
+  static trustedHosts: string[] = [
+    '*.beta.builder.io',
+    'beta.builder.io',
+    'builder.io',
+    'localhost',
+    'qa.builder.io',
+  ];
+  static serverContext: any;
   static plugins: any[] = [];
 
   static actions: Action[] = [];
@@ -913,10 +965,24 @@ export class Builder {
     this.trustedHosts.push(host);
   }
 
+  /**
+   * @param context @type {import('isolated-vm').Context}
+   * Use this function to control the execution context of custom code on the server.
+   * const ivm = require('isolated-vm');
+   * const isolate = new ivm.Isolate({ memoryLimit: 128 });
+   * const context = isolate.createContextSync();
+   * Builder.setServerContext(context);
+   */
+  static setServerContext(context: any) {
+    this.serverContext = context;
+  }
+
   static isTrustedHost(hostname: string) {
     return (
-      this.trustedHosts.findIndex(
-        trustedHost => trustedHost === hostname || hostname.endsWith(`.${trustedHost}`)
+      this.trustedHosts.findIndex(trustedHost =>
+        trustedHost.startsWith('*.')
+          ? hostname.endsWith(trustedHost.slice(1))
+          : trustedHost === hostname
       ) > -1
     );
   }
@@ -1150,7 +1216,7 @@ export class Builder {
 
     const host = this.host;
 
-    fetch(`${host}/api/v1/track`, {
+    getFetch()(`${host}/api/v1/track`, {
       method: 'POST',
       body: JSON.stringify({ events }),
       headers: {
@@ -1195,6 +1261,17 @@ export class Builder {
     }
   }
 
+  get apiVersion() {
+    return this.apiVersion$.value;
+  }
+
+  set apiVersion(apiVersion: ApiVersion | undefined) {
+    if (this.apiVersion !== apiVersion) {
+      this.apiVersion$.next(apiVersion);
+    }
+  }
+
+  private apiVersion$ = new BehaviorSubject<ApiVersion | undefined>(undefined);
   private canTrack$ = new BehaviorSubject(!this.browserTrackingDisabled);
   private apiKey$ = new BehaviorSubject<string | null>(null);
   private authToken$ = new BehaviorSubject<string | null>(null);
@@ -1546,7 +1623,8 @@ export class Builder {
     protected request?: IncomingMessage,
     protected response?: ServerResponse,
     forceNewInstance = false,
-    authToken: string | null = null
+    authToken: string | null = null,
+    apiVersion?: ApiVersion
   ) {
     // TODO: use a window variable for this perhaps, e.g. bc webcomponents may be loading builder twice
     // with it's and react (use rollup build to fix)
@@ -1561,6 +1639,9 @@ export class Builder {
 
     if (apiKey) {
       this.apiKey = apiKey;
+    }
+    if (apiVersion) {
+      this.apiVersion = apiVersion;
     }
     if (authToken) {
       this.authToken = authToken;
@@ -1690,10 +1771,11 @@ export class Builder {
       }
 
       if (options) {
-        // picking only locale and includeRefs
+        // picking only locale, includeRefs, and enrich for now
         this.queryOptions = {
           ...(options.locale && { locale: options.locale }),
           ...(options.includeRefs && { includeRefs: options.includeRefs }),
+          ...(options.enrich && { enrich: options.enrich }),
         };
       }
 
@@ -1964,7 +2046,8 @@ export class Builder {
     canTrack = this.defaultCanTrack,
     req?: IncomingMessage,
     res?: ServerResponse,
-    authToken?: string
+    authToken?: string | null,
+    apiVersion?: ApiVersion
   ) {
     if (req) {
       this.request = req;
@@ -1976,6 +2059,9 @@ export class Builder {
     this.apiKey = apiKey;
     if (authToken) {
       this.authToken = authToken;
+    }
+    if (apiVersion) {
+      this.apiVersion = apiVersion;
     }
     return this;
   }
@@ -2088,15 +2174,21 @@ export class Builder {
         options.req,
         options.res,
         undefined,
-        options.authToken || this.authToken
+        options.authToken || this.authToken,
+        options.apiVersion || this.apiVersion
       );
       instance.setUserAttributes(this.getUserAttributes());
     } else {
+      // NOTE: All these are when .init is not called and the customer
+      // directly calls .get on the singleton instance of Builder
       if (options.apiKey && !this.apiKey) {
         this.apiKey = options.apiKey;
       }
       if (options.authToken && !this.authToken) {
         this.authToken = options.authToken;
+      }
+      if (options.apiVersion && !this.apiVersion) {
+        this.apiVersion = options.apiVersion;
       }
     }
     return instance.queueGetContent(modelName, options).map(
@@ -2211,6 +2303,19 @@ export class Builder {
     return observable;
   }
 
+  // this is needed to satisfy the Angular SDK, which used to rely on the more complex version of `requestUrl`.
+  // even though we only use `fetch()` now, we prefer to keep the old behavior and use the `fetch` that comes from
+  // the core SDK for consistency
+  requestUrl(
+    url: string,
+    options?: { headers: { [header: string]: number | string | string[] | undefined }; next?: any }
+  ) {
+    return getFetch()(url, {
+      next: { revalidate: 1, ...options?.next },
+      ...options,
+    } as SimplifiedFetchOptions).then(res => res.json());
+  }
+
   get host() {
     switch (this.env) {
       case 'qa':
@@ -2242,6 +2347,14 @@ export class Builder {
       );
     }
 
+    if (this.apiVersion) {
+      if (!['v1', 'v3'].includes(this.apiVersion)) {
+        throw new Error(`Invalid apiVersion: expected 'v1' or 'v3', received '${this.apiVersion}'`);
+      }
+    } else {
+      this.apiVersion = DEFAULT_API_VERSION;
+    }
+
     if (!usePastQueue && !this.getContentQueue) {
       return;
     }
@@ -2258,17 +2371,30 @@ export class Builder {
       ...queue[0].options,
       ...this.queryOptions,
     };
+
+    if (queue[0].locale) {
+      queryParams.locale = queue[0].locale;
+    }
     if (queue[0].fields) {
       queryParams.fields = queue[0].fields;
     }
     if (queue[0].format) {
       queryParams.format = queue[0].format;
     }
+    if ('noTraverse' in queue[0]) {
+      queryParams.noTraverse = queue[0].noTraverse;
+    }
+    if ('includeUnpublished' in queue[0]) {
+      queryParams.includeUnpublished = queue[0].includeUnpublished;
+    }
+    if (queue[0].sort) {
+      queryParams.sort = queue[0].sort;
+    }
 
     const pageQueryParams: ParamsMap =
       typeof location !== 'undefined'
         ? QueryString.parseDeep(location.search.substr(1))
-        : undefined || {};
+        : undefined || {}; // TODO: WHAT about SSR (this.request) ?
 
     const userAttributes =
       // FIXME: HACK: only checks first in queue for user attributes overrides, should check all
@@ -2326,12 +2452,6 @@ export class Builder {
           queryParams[`overrides.${key}`] = this.overrides[key];
         }
       }
-    }
-
-    if (!Builder.isReact) {
-      // TODO: remove me once v1 page editors converted to v2
-      // queryParams.extractCss = true;
-      queryParams.prerender = true;
     }
 
     for (const options of queue) {
@@ -2395,7 +2515,7 @@ export class Builder {
 
     const format = queryParams.format;
 
-    const requestOptions = { headers: {} };
+    const requestOptions = { headers: {}, next: { revalidate: 1 } };
     if (this.authToken) {
       requestOptions.headers = {
         ...requestOptions.headers,
@@ -2405,11 +2525,13 @@ export class Builder {
 
     const fn = format === 'solid' || format === 'react' ? 'codegen' : 'query';
 
+    // NOTE: this is a hack to get around the fact that the codegen endpoint is not yet available in v3
+    const apiVersionBasedOnFn = fn === 'query' ? this.apiVersion : 'v1';
     const url =
-      `${host}/api/v1/${fn}/${this.apiKey}/${keyNames}` +
+      `${host}/api/${apiVersionBasedOnFn}/${fn}/${this.apiKey}/${keyNames}` +
       (queryParams && hasParams ? `?${queryStr}` : '');
 
-    const promise = fetch(url, requestOptions)
+    const promise = getFetch()(url, requestOptions)
       .then(res => res.json())
       .then(
         result => {
@@ -2576,16 +2698,37 @@ export class Builder {
       req?: IncomingMessage;
       res?: ServerResponse;
       apiKey?: string;
+      authToken?: string;
     } = {}
   ): Promise<BuilderContent[]> {
     let instance: Builder = this;
     if (!Builder.isBrowser) {
-      instance = new Builder(options.apiKey || this.apiKey, options.req, options.res);
+      instance = new Builder(
+        options.apiKey || this.apiKey,
+        options.req,
+        options.res,
+        false,
+        options.authToken || this.authToken,
+        options.apiVersion || this.apiVersion
+      );
       instance.setUserAttributes(this.getUserAttributes());
     } else {
+      // NOTE: All these are when .init is not called and the customer
+      // directly calls .get on the singleton instance of Builder
       if (options.apiKey && !this.apiKey) {
         this.apiKey = options.apiKey;
       }
+      if (options.authToken && !this.authToken) {
+        this.authToken = options.authToken;
+      }
+      if (options.apiVersion && !this.apiVersion) {
+        this.apiVersion = options.apiVersion;
+      }
+    }
+
+    // Set noTraverse=true if NOT already passed by user, for query performance
+    if (!('noTraverse' in options)) {
+      options.noTraverse = true;
     }
 
     return instance
@@ -2594,7 +2737,7 @@ export class Builder {
         ...options,
         key:
           options.key ||
-          // Make the key include all options so we don't reuse cache for the same conent fetched
+          // Make the key include all options, so we don't reuse cache for the same content fetched
           // with different options
           Builder.isBrowser
             ? `${modelName}:${hash(omit(options, 'initialContent', 'req', 'res'))}`

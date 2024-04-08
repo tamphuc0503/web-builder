@@ -1,9 +1,9 @@
-import type { ComponentInfo } from '../../types/components';
+import type { ComponentInfo } from '../../types/components.js';
 
 export const componentInfo: ComponentInfo = {
   name: 'Custom Code',
   static: true,
-  builtIn: true,
+
   requiredPermissions: ['editCode'],
   inputs: [
     {

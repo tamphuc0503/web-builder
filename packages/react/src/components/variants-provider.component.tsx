@@ -1,3 +1,4 @@
+'use client';
 import * as React from 'react';
 import { builder, Builder, BuilderContent, BuilderContentVariation } from '@builder.io/sdk';
 
@@ -29,6 +30,7 @@ const variantsScript = (variantsString: string, contentId: string) =>
     variants.forEach(function (template) {
       document.querySelector('template[data-template-variant-id="' + template.id + '"]').remove();
     });
+    document.getElementById('variants-script-${contentId}').remove();
   }
 
   if (typeof document.createElement("template").content === 'undefined') {
@@ -99,10 +101,7 @@ interface VariantsProviderProps {
   children: (variants: BuilderContent[], renderScript?: () => JSX.Element) => JSX.Element;
 }
 
-export const VariantsProvider: React.SFC<VariantsProviderProps> = ({
-  initialContent,
-  children,
-}) => {
+export const VariantsProvider = ({ initialContent, children }: VariantsProviderProps) => {
   if (Builder.isBrowser && !builder.canTrack) {
     return children([initialContent]);
   }
@@ -127,6 +126,7 @@ export const VariantsProvider: React.SFC<VariantsProviderProps> = ({
     );
     const renderScript = () => (
       <script
+        id={`variants-script-${initialContent.id}`}
         dangerouslySetInnerHTML={{
           __html: variantsScript(variantsJson, initialContent.id!),
         }}

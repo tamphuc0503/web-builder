@@ -1,9 +1,9 @@
-import type { ComponentInfo } from '../../types/components';
+import type { ComponentInfo } from '../../types/components.js';
 
 export const componentInfo: ComponentInfo = {
   name: 'Video',
   canHaveChildren: true,
-  builtIn: true,
+
   defaultStyles: {
     minHeight: '20px',
     minWidth: '20px',
@@ -17,7 +17,7 @@ export const componentInfo: ComponentInfo = {
       allowedFileTypes: ['mp4'],
       bubble: true,
       defaultValue:
-        'https://firebasestorage.googleapis.com/v0/b/builder-3b0a2.appspot.com/o/assets%2FKQlEmWDxA0coC3PK6UvkrjwkIGI2%2F28cb070609f546cdbe5efa20e931aa4b?alt=media&token=912e9551-7a7c-4dfb-86b6-3da1537d1a7f',
+        'https://cdn.builder.io/o/assets%2FYJIGb4i01jvw0SRdL5Bt%2Fd27731a526464deba0016216f5f9e570%2Fcompressed?apiKey=YJIGb4i01jvw0SRdL5Bt&token=d27731a526464deba0016216f5f9e570&alt=media&optimized=true',
       required: true,
     },
     {
@@ -56,6 +56,12 @@ export const componentInfo: ComponentInfo = {
       type: 'text',
       defaultValue: 'cover',
       enum: ['contain', 'cover', 'fill', 'auto'],
+    },
+    {
+      name: 'preload',
+      type: 'text',
+      defaultValue: 'metadata',
+      enum: ['auto', 'metadata', 'none'],
     },
     {
       name: 'fitContent',

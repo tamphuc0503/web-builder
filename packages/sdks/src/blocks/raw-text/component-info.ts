@@ -1,9 +1,9 @@
-import type { ComponentInfo } from '../../types/components';
+import type { ComponentInfo } from '../../types/components.js';
 
 export const componentInfo: ComponentInfo = {
   name: 'Builder:RawText',
   hideFromInsertMenu: true,
-  builtIn: true,
+
   inputs: [
     {
       name: 'text',

@@ -8,7 +8,11 @@ Builder.isReact = true;
 export { BuilderBlocks } from './components/builder-blocks.component';
 export { BuilderBlock as BuilderBlockComponent } from './components/builder-block.component';
 export { BuilderContent } from './components/builder-content.component';
-import { BuilderComponent, onChange } from './components/builder-component.component';
+import {
+  BuilderComponent,
+  onChange,
+  RegisteredComponent,
+} from './components/builder-component.component';
 export { BuilderStoreContext, BuilderStore } from './store/builder-store';
 export { BuilderMetaContext } from './store/builder-meta';
 export { BuilderAsyncRequestsContext } from './store/builder-async-requests';
@@ -20,9 +24,9 @@ export { withBuilder } from './functions/with-builder';
 export { withChildren } from './functions/with-children';
 export { noWrap } from './functions/no-wrap';
 
-export { BuilderComponent as BuilderPage, onChange };
+export { BuilderComponent as BuilderPage, onChange, RegisteredComponent };
 export { BuilderComponent };
-export { BuilderComponent as RenderContent };
+export { BuilderComponent as Content };
 
 export { Text } from './blocks/Text';
 export { Slot as Dropzone } from './blocks/Slot';
