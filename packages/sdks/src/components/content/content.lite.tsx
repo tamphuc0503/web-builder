@@ -19,6 +19,7 @@ import type { ComponentInfo } from '../../types/components.js';
 import type { Dictionary } from '../../types/typescript.js';
 import Blocks from '../blocks/blocks.lite.jsx';
 import { getUpdateVariantVisibilityScript } from '../content-variants/helpers.js';
+import DynamicDiv from '../dynamic-div.lite.jsx';
 import InlinedScript from '../inlined-script.lite.jsx';
 import EnableEditor from './components/enable-editor.lite.jsx';
 import ContentStyles from './components/styles.lite.jsx';
@@ -93,6 +94,7 @@ export default function ContentComponent(props: ContentProps) {
           default: state.contentSetState,
         }),
         context: props.context || {},
+        canTrack: props.canTrack,
         apiKey: props.apiKey,
         apiVersion: props.apiVersion,
         componentInfos: [
@@ -110,6 +112,7 @@ export default function ContentComponent(props: ContentProps) {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore
           reactNative: props.blocksWrapper || ScrollView,
+          angular: props.blocksWrapper || DynamicDiv,
           default: props.blocksWrapper || 'div',
         }),
         BlocksWrapperProps: props.blocksWrapperProps || {},

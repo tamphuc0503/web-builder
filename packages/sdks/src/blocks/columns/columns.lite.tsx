@@ -6,6 +6,7 @@ import {
   useTarget,
 } from '@builder.io/mitosis';
 import Blocks from '../../components/blocks/blocks.lite.jsx';
+import DynamicDiv from '../../components/dynamic-div.lite.jsx';
 import DynamicRenderer from '../../components/dynamic-renderer/dynamic-renderer.lite.jsx';
 import InlinedStyles from '../../components/inlined-styles.lite.jsx';
 import type { SizeName } from '../../constants/device-sizes.js';
@@ -15,7 +16,8 @@ import { deoptSignal } from '../../functions/deopt.js';
 import { getClassPropName } from '../../functions/get-class-prop-name.js';
 import { mapStyleObjToStrIfNeeded } from '../../functions/get-style.js';
 import type { Dictionary } from '../../types/typescript.js';
-import type { ColumnProps } from './columns.types.js';
+import type { Column, ColumnProps } from './columns.types.js';
+import { getColumnsClass } from './helpers.js';
 
 type CSSVal = string | number;
 
@@ -33,6 +35,23 @@ export default function Columns(props: ColumnProps) {
     gutterSize: typeof props.space === 'number' ? props.space || 0 : 20,
     cols: props.columns || [],
     stackAt: props.stackColumnsAt || 'tablet',
+    getTagName(column: Column) {
+      return column.link
+        ? props.builderLinkComponent ||
+            useTarget({
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+              reactNative: BaseText,
+              default: 'a',
+            })
+        : useTarget({
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            reactNative: View,
+            angular: DynamicDiv,
+            default: 'div',
+          });
+    },
     getWidth(index: number) {
       return state.cols[index]?.width || 100 / state.cols.length;
     },
@@ -66,10 +85,10 @@ export default function Columns(props: ColumnProps) {
       props.stackColumnsAt === 'never'
         ? 'row'
         : props.reverseColumnsWhenStacked
-        ? 'column-reverse'
-        : 'column',
+          ? 'column-reverse'
+          : 'column',
 
-    get columnsCssVars(): Dictionary<string> {
+    columnsCssVars(): Dictionary<string> {
       return useTarget({
         reactNative: {
           flexDirection: state.flexDir as 'row' | 'column' | 'column-reverse',
@@ -141,7 +160,7 @@ export default function Columns(props: ColumnProps) {
       return breakpointSizes[size].max;
     },
 
-    get columnsStyles(): string {
+    columnsStyles(): string {
       return `
         @media (max-width: ${state.getWidthForBreakpointSize('medium')}px) {
           .${props.builderBlock.id}-breakpoints {
@@ -168,16 +187,30 @@ export default function Columns(props: ColumnProps) {
         },
       `;
     },
+
+    getAttributes(column: any, index: number) {
+      return {
+        ...useTarget({
+          reactNative: {
+            dataSet: { 'builder-block-name': 'builder-column' },
+          },
+          default: {},
+        }),
+        ...(column.link ? { href: column.link } : {}),
+        [getClassPropName()]: 'builder-column',
+        style: mapStyleObjToStrIfNeeded(state.columnCssVars(index)),
+      };
+    },
   });
 
   return (
     <div
-      class={`builder-columns ${props.builderBlock.id}-breakpoints`}
+      class={getColumnsClass(props.builderBlock?.id)}
       css={{
         display: 'flex',
         lineHeight: 'normal',
       }}
-      style={state.columnsCssVars}
+      style={state.columnsCssVars()}
       {...useTarget({
         reactNative: {
           dataSet: { 'builder-block-name': 'builder-columns' },
@@ -192,41 +225,16 @@ export default function Columns(props: ColumnProps) {
          * "dynamic" media query values based on custom breakpoints.
          * Adding them directly otherwise leads to Mitosis and TS errors.
          */}
-        <InlinedStyles styles={state.columnsStyles} id="builderio-columns" />
+        <InlinedStyles styles={state.columnsStyles()} id="builderio-columns" />
       </Show>
 
       <For each={props.columns}>
         {(column, index) => (
           <DynamicRenderer
             key={index}
-            TagName={
-              column.link
-                ? props.builderLinkComponent ||
-                  useTarget({
-                    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                    // @ts-ignore
-                    reactNative: BaseText,
-                    default: 'a',
-                  })
-                : useTarget({
-                    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                    // @ts-ignore
-                    reactNative: View,
-                    default: 'div',
-                  })
-            }
+            TagName={state.getTagName(column)}
             actionAttributes={{}}
-            attributes={{
-              ...useTarget({
-                reactNative: {
-                  dataSet: { 'builder-block-name': 'builder-column' },
-                },
-                default: {},
-              }),
-              ...(column.link ? { href: column.link } : {}),
-              [getClassPropName()]: 'builder-column',
-              style: mapStyleObjToStrIfNeeded(state.columnCssVars(index)),
-            }}
+            attributes={state.getAttributes(column, index)}
           >
             <Blocks
               blocks={useTarget({

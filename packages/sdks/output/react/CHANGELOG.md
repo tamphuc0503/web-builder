@@ -1,5 +1,129 @@
 # Builder.io React SDK Changelog (@builder.io/sdk-react)
 
+## 1.0.31
+
+### Patch Changes
+
+- b4381f5: Fix: `canTrack=false` not respected in Symbols
+
+## 1.0.30
+
+### Patch Changes
+
+- 4aaba38: Fix: bump `isolated-vm` dependency to `5.0.0`, adding support for Node v22.
+
+## 1.0.29
+
+### Patch Changes
+
+- 74d78e1: Fix: error in identifying model being previewed: https://github.com/BuilderIO/builder/pull/3310/files#diff-6293c2a27254fa850a123075284412ef86d270a4518e0ad3aad81132b590ea1cL311
+
+## 1.0.28
+
+### Patch Changes
+
+- f3aab34: Feat: Accordion widget for gen2 sdks
+
+## 1.0.27
+
+### Patch Changes
+
+- 70fccea: Fix: `query` option correctly flattens mongodb queries
+
+## 1.0.26
+
+### Patch Changes
+
+- af84d1e: Fix: make `initializeNodeRuntime` argument optional
+
+## 1.0.25
+
+### Patch Changes
+
+- bd21dcf: Fix: improve NodeJS runtime performance by reusing the same IsolatedVM Isolate instance for all data bindings. Add the ability to provide arguments to configure the isolate in `initializeNodeRuntime` via an `ivmIsolateOptions` parameter.
+
+## 1.0.24
+
+### Patch Changes
+
+- 84cd444: feature: add the Builder Tabs block (ported from gen1 widgets).
+
+## 1.0.23
+
+### Patch Changes
+
+- 78dee25: Fix: remove redundant warning for evaluation of empty code blocks.
+
+## 1.0.22
+
+### Patch Changes
+
+- f3c5ff3: Fix: `isPreviewing` logic on the server, and make usage of `isEditing` unnecessary.
+- 46bd611: Feature: add support for hover animations.
+
+## 1.0.21
+
+### Patch Changes
+
+- d8e08ae: Feature: add `@builder.io/sdk-react/node/init` entry point with `initializeNodeRuntime` export that sets the IVM instance.
+
+  This import should be called in a server-only location, such as:
+
+  - The NextJS Pages router's `_document.tsx`:
+
+  ```tsx
+  // _document.tsx
+  import { Html, Head, Main, NextScript } from "next/document";
+  import { initializeNodeRuntime } from "@builder.io/sdk-react/node/init";
+  initializeNodeRuntime();
+
+  export default function Document() {
+    return (
+      <Html lang="en">
+        <Head />
+        <body>
+          <Main />
+          <NextScript />
+        </body>
+      </Html>
+    );
+  }
+  ```
+
+  - Your Remix route's `loader` responsible for fetching the page content from Builder.io:
+
+  ```tsx
+  // ($slug)._index.tsx
+  import { fetchOneEntry } from "@builder.io/sdk-react";
+
+  export const loader = async ({ params, request }: LoaderFunctionArgs) => {
+    // the import must be inside the loader itself.
+    const { initializeNodeRuntime } = await import(
+      "@builder.io/sdk-react/node/init"
+    );
+    await initializeNodeRuntime();
+
+    const page = await fetchOneEntry({
+      /** */
+    });
+  };
+  ```
+
+- 7bad8d9: Fix: better error-logging for `isolated-vm` import.
+- d8e08ae: Fix: `fetchOneEntry` prop types of `fetch` and `fetchOptions`
+
+## 1.0.20
+
+### Patch Changes
+
+- a309a4f: Fix: add missing `key` prop to `Select` block's `option`
+
+## 1.0.19
+
+### Patch Changes
+
+- cde7c61: feat: export `BuilderContext` from sdks
+
 ## 1.0.17
 
 ### Patch Changes
@@ -431,7 +555,7 @@ In case you feel the need to use our older API Version `v2`, reach out to us at 
 ```
 
 ```js
-getContent({ apiVersion: 'v2' });
+getContent({ apiVersion: "v2" });
 ```
 
 More details on the Builder API Versions visit [this link](https://www.builder.io/c/docs/content-api-versions).

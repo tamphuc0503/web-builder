@@ -91,9 +91,7 @@ export const lazyifyReactComponentsVitePlugin = (): import('vite').Plugin => {
       import * as BrowserSdk from '../browser/index.mjs';
       import {${exportsObject}} from './${BLOCKS_EXPORTS_ENTRY}.mjs';
       
-      ${importNames
-        .map((name) => `export const ${name} = ${getComponent(name)}`)
-        .join(';\n')}
+      ${importNames.map((name) => `export const ${name} = ${getComponent(name)}`).join(';\n')}
       `;
 
         const DYNAMIC_EXPORTS_FILE_NAME = 'dynamic-blocks-exports';
@@ -217,13 +215,20 @@ export default defineConfig({
         index: './src/index.ts',
         [SERVER_ENTRY]: './src/server-index.ts',
         [BLOCKS_EXPORTS_ENTRY]: './src/index-helpers/blocks-exports.ts',
+        init: './src/functions/evaluate/node-runtime/init.ts',
       },
       formats: ['es', 'cjs'],
       fileName: (format, entryName) =>
         `${entryName}.${format === 'es' ? 'mjs' : 'cjs'}`,
     },
     rollupOptions: {
-      external: ['react', 'react/jsx-runtime', 'react-dom', 'node:module'],
+      external: [
+        'react',
+        'react/jsx-runtime',
+        'react-dom',
+        'node:module',
+        'isolated-vm',
+      ],
       output: {
         globals: {
           react: 'react',

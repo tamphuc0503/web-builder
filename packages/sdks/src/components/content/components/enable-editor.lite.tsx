@@ -35,10 +35,12 @@ import type { BuilderContent } from '../../../types/builder-content.js';
 import type { ComponentInfo } from '../../../types/components.js';
 import type { Dictionary } from '../../../types/typescript.js';
 import { triggerAnimation } from '../../block/animator.js';
+import DynamicDiv from '../../dynamic-div.lite.jsx';
 import type {
   BuilderComponentStateChange,
   ContentProps,
 } from '../content.types.js';
+import { getWrapperClassName } from './styles.helpers.js';
 
 useMetadata({
   qwik: {
@@ -112,10 +114,14 @@ export default function EnableEditor(props: BuilderEditorProps) {
         },
       });
     },
+    get showContentProps() {
+      return props.showContent ? {} : { hidden: true, 'aria-hidden': true };
+    },
     ContentWrapper: useTarget({
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       reactNative: props.contentWrapper || ScrollView,
+      angular: props.contentWrapper || DynamicDiv,
       default: props.contentWrapper || 'div',
     }),
     processMessage(event: MessageEvent): void {
@@ -302,7 +308,7 @@ export default function EnableEditor(props: BuilderEditorProps) {
       const searchParams = new URL(location.href).searchParams;
       const searchParamPreviewModel = searchParams.get('builder.preview');
       const searchParamPreviewId = searchParams.get(
-        `builder.preview.${searchParamPreviewModel}`
+        `builder.overrides.${searchParamPreviewModel}`
       );
       const previewApiKey =
         searchParams.get('apiKey') || searchParams.get('builder.space');
@@ -349,6 +355,9 @@ export default function EnableEditor(props: BuilderEditorProps) {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore
           react: () => INJECT_EDITING_HOOK_HERE,
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          angular: () => INJECT_EDITING_HOOK_HERE,
           default: () => {
             if (elementRef) {
               elementRef.dispatchEvent(new CustomEvent('initeditingbldr'));
@@ -388,8 +397,11 @@ export default function EnableEditor(props: BuilderEditorProps) {
         });
       }
 
-      // override normal content in preview mode
-      if (isPreviewing()) {
+      /**
+       * Override normal content in preview mode.
+       * We ignore this when editing, since the edited content is already being sent from the editor via post messages.
+       */
+      if (isPreviewing() && !isEditing()) {
         useTarget({
           rsc: () => {},
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -401,6 +413,10 @@ export default function EnableEditor(props: BuilderEditorProps) {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore
           react: () => INJECT_PREVIEWING_HOOK_HERE,
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+
+          angular: () => INJECT_PREVIEWING_HOOK_HERE,
           default: () => {
             if (elementRef) {
               elementRef.dispatchEvent(new CustomEvent('initpreviewingbldr'));
@@ -415,7 +431,7 @@ export default function EnableEditor(props: BuilderEditorProps) {
     () => {
       if (!props.apiKey) {
         logger.error(
-          'No API key provided to `RenderContent` component. This can cause issues. Please provide an API key using the `apiKey` prop.'
+          'No API key provided to `Content` component. This can cause issues. Please provide an API key using the `apiKey` prop.'
         );
       }
 
@@ -470,9 +486,9 @@ export default function EnableEditor(props: BuilderEditorProps) {
         onClick={(event: any) => state.onClick(event)}
         builder-content-id={props.builderContextSignal.value.content?.id}
         builder-model={props.model}
-        className={`variant-${
+        className={getWrapperClassName(
           props.content?.testVariationId || props.content?.id
-        }`}
+        )}
         {...useTarget({
           reactNative: {
             // currently, we can't set the actual ID here.
@@ -481,7 +497,7 @@ export default function EnableEditor(props: BuilderEditorProps) {
           },
           default: {},
         })}
-        {...(props.showContent ? {} : { hidden: true, 'aria-hidden': true })}
+        {...state.showContentProps}
         {...props.contentWrapperProps}
       >
         {props.children}

@@ -14,11 +14,14 @@ import type {
 import { getBlockComponentOptions } from '../../functions/get-block-component-options.js';
 import { getProcessedBlock } from '../../functions/get-processed-block.js';
 import type { BuilderBlock } from '../../types/builder-block.js';
+import DynamicDiv from '../dynamic-div.lite.jsx';
 import { bindAnimations } from './animator.js';
 import {
   getComponent,
   getInheritedStyles,
   getRepeatItemData,
+  shouldPassLinkComponent,
+  shouldPassRegisteredComponents,
 } from './block.helpers.js';
 import BlockStyles from './components/block-styles.lite.jsx';
 import BlockWrapper from './components/block-wrapper.lite.jsx';
@@ -100,6 +103,7 @@ export default function Block(props: BlockProps) {
          * eslint-disable-next-line @typescript-eslint/ban-ts-comment
          * @ts-ignore */
         reactNative: View,
+        angular: DynamicDiv,
         default: props.block.tagName || 'div',
       });
     },
@@ -139,15 +143,10 @@ export default function Block(props: BlockProps) {
         componentOptions: {
           ...getBlockComponentOptions(state.processedBlock),
           builderContext: props.context,
-          ...(state.blockComponent?.name === 'Core:Button' ||
-          state.blockComponent?.name === 'Symbol' ||
-          state.blockComponent?.name === 'Columns' ||
-          state.blockComponent?.name === 'Form:Form'
+          ...(shouldPassLinkComponent(state.blockComponent)
             ? { builderLinkComponent: props.linkComponent }
             : {}),
-          ...(state.blockComponent?.name === 'Symbol' ||
-          state.blockComponent?.name === 'Columns' ||
-          state.blockComponent?.name === 'Form:Form'
+          ...(shouldPassRegisteredComponents(state.blockComponent)
             ? { builderComponents: props.registeredComponents }
             : {}),
         },
@@ -175,12 +174,10 @@ export default function Block(props: BlockProps) {
     const animations = state.processedBlock.animations;
     if (animations && blockId) {
       bindAnimations(
-        animations
-          .filter((item) => item.trigger !== 'hover')
-          .map((animation) => ({
-            ...animation,
-            elementId: blockId,
-          }))
+        animations.map((animation) => ({
+          ...animation,
+          elementId: blockId,
+        }))
       );
     }
   });
